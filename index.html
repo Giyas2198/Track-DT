@@ -34,7 +34,6 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         #loader { display: none; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); }
-        /* Mengoptimalkan ruang agar tabel naik maksimal */
         .table-container { height: calc(100vh - 230px); min-height: 450px; }
         @keyframes pulse-highlight {
             0%, 100% { background-color: transparent; }
@@ -72,7 +71,6 @@
 
     <div class="max-w-[1600px] mx-auto p-3 lg:p-4">
         <header class="flex flex-wrap items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 gap-3">
-            
             <div class="flex items-center gap-4 flex-1 min-w-[300px]">
                 <div class="bg-blue-900 p-2.5 rounded-xl text-white shadow-md shadow-blue-900/10 flex-shrink-0">
                     <i class="fas fa-truck-fast text-lg"></i>
@@ -172,7 +170,6 @@
         function getSLATarget(transporterName) {
             if (!transporterName) return null;
             const clean = transporterName.toUpperCase().replace(/[\.\-]/g, '').trim();
-            
             if (clean.includes("WIRA TRANS MANDIRI")) return 1;
             if (clean.includes("ELTRANS")) return 1;
             if (clean.includes("YAS TRANS SARELINDO")) return 1;
@@ -180,20 +177,27 @@
             if (clean.includes("RESWARA PRIMA EXPRESS")) return 2;
             if (clean.includes("MAERSK")) return 2;
             if (clean.includes("HUMALA GIAT MANDIRI")) return 7;
-            
             return null;
         }
 
         async function init() {
+            // Muat data lokal terlebih dahulu agar aplikasi cepat terbuka
             const local = localStorage.getItem('jotrans_local_db');
             if (local) { 
                 globalData = JSON.parse(local); 
                 renderTable(globalData); 
             }
+            
+            // Ambit data dari Firebase Cloud
             try {
                 const docSnap = await window.getDoc(window.doc(window.db, "monitoring_dt", "current_status"));
-                if (docSnap.exists()) { syncData(docSnap.data().items); }
-            } catch (e) { console.log("Offline mode active"); }
+                if (docSnap.exists()) { 
+                    // PERBAIKAN LOGIKA: Timpa (Overwrite) data lokal dengan data Cloud yang valid, jangan di-merge!
+                    syncData(docSnap.data().items || []); 
+                }
+            } catch (e) { 
+                console.log("Offline mode active"); 
+            }
         }
         setTimeout(init, 1000);
 
@@ -212,6 +216,7 @@
             return dateVal;
         }
 
+        // EXCEL IMPORT ENGINE
         document.getElementById('uploadInput').addEventListener('change', function(e) {
             const reader = new FileReader();
             toggleLoader(true);
@@ -400,11 +405,9 @@
             const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === String(dtID));
             if (idx !== -1) {
                 globalData[idx][field] = dateVal;
-                
                 if (field === 'Tgl Diterima DT' && dateVal && !globalData[idx]['Tgl Diterima Barang']) {
                     globalData[idx]['Tgl Diterima Barang'] = dateVal;
                 }
-
                 saveAndRender();
             }
         }
@@ -436,27 +439,54 @@
             }
         }
 
-        function deleteOne(dt) {
+        // PERBAIKAN FUNGSIONAL: Hapus Langsung di Lokal & Auto Update ke Cloud Firestore
+        async function deleteOne(dt) {
             if (confirm(`Hapus data Delivery Ticket: ${dt}?`)) {
+                toggleLoader(true);
+                // 1. Hapus dari array lokal
                 globalData = globalData.filter(row => String(row['Delivery Ticket'] || row['DT']) !== String(dt));
                 if(selectedDTs.has(dt)) selectedDTs.delete(dt);
-                saveAndRender();
-                showMsg("Data Deleted", "bg-red-600 text-white");
+                
+                // 2. Simpan ke LocalStorage dan render ulang tabel
+                localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
+                renderTable(globalData);
+
+                // 3. Langsung timpa data Cloud agar data yang dihapus hilang permanen
+                try {
+                    await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
+                    showMsg("Data Deleted Permanently!", "bg-red-600 text-white");
+                } catch (e) {
+                    showMsg("Cloud Update Failed!", "bg-amber-600 text-white");
+                }
+                toggleLoader(false);
             }
         }
 
-        function deleteSelected() {
+        // PERBAIKAN FUNGSIONAL: Hapus Massal Langsung & Auto Update ke Cloud Firestore
+        async function deleteSelected() {
             if (confirm(`Hapus ${selectedDTs.size} data terpilih?`)) {
+                toggleLoader(true);
+                // 1. Filter massal
                 globalData = globalData.filter(row => !selectedDTs.has(String(row['Delivery Ticket'] || row['DT'])));
                 selectedDTs.clear();
                 document.getElementById('selectAll').checked = false;
-                saveAndRender();
-                showMsg("Data Deleted", "bg-red-600 text-white");
+                
+                // 2. Simpan lokal
+                localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
+                renderTable(globalData);
+
+                // 3. Tembak pembaruan ke Cloud Firebase
+                try {
+                    await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
+                    showMsg("Selected Data Deleted Permanently!", "bg-red-600 text-white");
+                } catch (e) {
+                    showMsg("Cloud Update Failed!", "bg-amber-600 text-white");
+                }
+                toggleLoader(false);
             }
         }
 
         // --- CAMERA HP SCANNER ENGINE ---
-
         function openScanner() {
             document.getElementById('scannerModal').classList.remove('hidden');
             document.getElementById('scanResult').innerText = "Menginisialisasi Kamera Belakang...";
@@ -477,45 +507,37 @@
             document.getElementById('scannerModal').classList.add('hidden');
         }
 
-    function onScanSuccess(decodedText, decodedResult) {
-    // Membersihkan spasi di awal/akhir teks hasil scan
-    const cleanedText = decodedText.trim(); 
-    document.getElementById('scanResult').innerHTML = `<span class="text-emerald-600 font-bold">Terbaca: ${cleanedText}</span>`;
-    
-    // Mencari baris data berdasarkan nomor "Delivery Ticket" atau "DT"
-    const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT'] || '').trim() === cleanedText);
-    
-    if (idx !== -1) {
-        closeScanner(); // Matikan kamera setelah berhasil scan
-        
-        // Mengambil tanggal hari ini (Format: YYYY-MM-DD)
-        const today = new Date().toISOString().split('T')[0];
-        
-        // OTOMATIS MENGISI TANGGAL TERIMA DT
-        globalData[idx]['Tgl Diterima DT'] = today;
-        
-        // Simpan perubahan ke Local Storage & perbarui tampilan tabel
-        saveAndRender(); 
+        function onScanSuccess(decodedText, decodedResult) {
+            const cleanedText = decodedText.trim();
+            document.getElementById('scanResult').innerHTML = `<span class="text-emerald-600 font-bold">Terbaca: ${cleanedText}</span>`;
+            
+            const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === cleanedText);
+            
+            if (idx !== -1) {
+                closeScanner();
+                const today = new Date().toISOString().split('T')[0];
+                globalData[idx]['Tgl Diterima DT'] = today;
+                if(!globalData[idx]['Tgl Diterima Barang']) {
+                    globalData[idx]['Tgl Diterima Barang'] = today;
+                }
+                
+                saveAndRender();
 
-        // Efek otomatis gulung (scroll) layar ke baris yang baru di-update agar langsung kelihatan
-        const targetRow = document.getElementById(`row-${cleanedText}`);
-        if (targetRow) {
-            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            targetRow.classList.add('bg-emerald-50', 'transition-all', 'duration-500');
-            setTimeout(() => targetRow.classList.remove('bg-emerald-50'), 4000);
+                const targetRow = document.getElementById(`row-${cleanedText}`);
+                if (targetRow) {
+                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetRow.classList.add('row-highlight');
+                    setTimeout(() => targetRow.classList.remove('row-highlight'), 4000);
+                }
+                showMsg(`DT ${cleanedText} Berhasil Di-POD Selesai!`, "bg-emerald-600 text-white");
+            } else {
+                document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak terdaftar di list ini!</span>`;
+            }
         }
-        
-        showMsg(`DT ${cleanedText} Berhasil Diterima!`, "bg-emerald-600 text-white");
-    } else {
-        // Jika nomor DT tidak ditemukan di database tabel saat itu
-        document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak ditemukan di list!</span>`;
-    }
-}
 
         function onScanFailure(error) {}
 
         // --- FILTERING LOGIC ---
-
         function handleGlobalSearch() {
             const val = document.getElementById('globalSearch').value.toLowerCase();
             const filtered = globalData.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(val)));
@@ -538,13 +560,11 @@
             toggleLoader(false);
         }
 
+        // SINKRONISASI UTAMA: Menimpa data lokal agar selaras penuh dengan database Cloud Firebase
         function syncData(cloudItems) {
-            cloudItems.forEach(cItem => {
-                const dt = String(cItem['Delivery Ticket'] || cItem['DT'] || '');
-                const idx = globalData.findIndex(l => String(l['Delivery Ticket'] || l['DT']) === dt);
-                if (idx === -1) globalData.push(cItem);
-                else globalData[idx] = { ...globalData[idx], ...cItem };
-            });
+            if (cloudItems && cloudItems.length > 0) {
+                globalData = cloudItems;
+            }
             saveAndRender();
         }
 
