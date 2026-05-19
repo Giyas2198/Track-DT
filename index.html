@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JO-TRANS | Pro Edition v16 POD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCvdAFDBeciiSqsnAjW8PXx-pxv64ztdhU",
+            authDomain: "jtn-pr-control.firebaseapp.com",
+            projectId: "jtn-pr-control",
+            storageBucket: "jtn-pr-control.firebasestorage.app",
+            messagingSenderId: "921630437726",
+            appId: "1:921630437726:web:811585e1c987d7fea79fcf"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        window.db = db; window.setDoc = setDoc; window.doc = doc; window.getDoc = getDoc;
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #loader { display: none; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); }
+        /* Mengoptimalkan ruang agar tabel naik maksimal */
+        .table-container { height: calc(100vh - 230px); min-height: 450px; }
+        @keyframes pulse-highlight {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgb(219 234 254); }
+        }
+        .row-highlight { animation: pulse-highlight 2s ease-in-out 2; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+    <div id="loader" class="fixed inset-0 z-[100] flex items-center justify-center">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-900 border-opacity-20 border-t-blue-900 mb-2"></div>
+            <p class="text-xs font-bold text-blue-900 uppercase tracking-widest">Processing...</p>
+        </div>
+    </div>
+
+    <div id="scannerModal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[110] flex flex-col items-center justify-center p-4">
+        <div class="bg-white p-5 rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md relative">
+            <button onclick="closeScanner()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition text-xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-blue-900 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-camera"></i> Scan Delivery Ticket (POD)
+                </h3>
+                <p class="text-[11px] text-slate-400 mt-0.5">Scan barcode lembar DT yang kembali untuk update otomatis.</p>
+            </div>
+            <div id="reader" class="overflow-hidden rounded-xl bg-slate-100 border border-slate-200" style="width: 100%;"></div>
+            <div id="scanResult" class="mt-3 p-3 bg-slate-50 rounded-xl text-center text-xs font-semibold text-slate-600 border border-slate-100">
+                Menghubungkan kamera...
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1600px] mx-auto p-3 lg:p-4">
+        <header class="flex flex-wrap items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 gap-3">
+            
+            <div class="flex items-center gap-4 flex-1 min-w-[300px]">
+                <div class="bg-blue-900 p-2.5 rounded-xl text-white shadow-md shadow-blue-900/10 flex-shrink-0">
+                    <i class="fas fa-truck-fast text-lg"></i>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-l border-slate-200 pl-4 text-xs">
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Total</span>
+                        <span id="dashTotal" class="font-black text-slate-800">0</span> <span class="text-[10px] text-slate-400">DT</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Selesai</span>
+                        <span id="dashSelesaiPercent" class="font-black text-emerald-600">0%</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Delivery</span>
+                        <span id="dashDeliveryPercent" class="font-black text-blue-600">0%</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">DT Return</span>
+                        <span id="dashReturnPercent" class="font-black text-purple-600">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <div id="statusMsg" class="hidden px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase animate-pulse"></div>
+                
+                <button onclick="openScanner()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-camera"></i> SCAN DT
+                </button>
+
+                <button onclick="uploadToFirebase()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-cloud-arrow-up"></i> SYNC TO CLOUD
+                </button>
+            </div>
+        </header>
+
+        <div class="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 mb-3 shadow-sm">
+            <div class="relative flex-1 min-w-[260px]">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="globalSearch" onkeyup="handleGlobalSearch()" placeholder="Global search..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs focus:ring-1 focus:ring-blue-500 transition-all">
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button onclick="deleteSelected()" id="btnDelete" class="hidden bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 border border-red-100">
+                    <i class="fas fa-trash-can"></i> DELETE SELECTED (<span id="selectedCount">0</span>)
+                </button>
+
+                <div class="relative inline-flex items-center">
+                    <label for="uploadInput" class="bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all">
+                        <i class="fas fa-file-excel text-emerald-600"></i> IMPORT EXCEL
+                    </label>
+                    <input type="file" id="uploadInput" accept=".csv, .xlsx" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-200">
+            <div class="overflow-x-auto custom-scrollbar table-container">
+                <table class="min-w-full text-xs border-collapse">
+                    <thead class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
+                        <tr>
+                            <th class="p-3 text-center w-10">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-gray-300 text-blue-900 focus:ring-blue-900">
+                            </th>
+                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">DT</th>
+                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">CO No</th>
+                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">Transporter</th>
+                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">Stuffing</th>
+                            
+                            <th class="p-3 text-left font-bold text-blue-900 uppercase tracking-wider bg-blue-50/50">Tgl Terima Barang (Cust)</th>
+                            <th class="p-3 text-left font-bold text-blue-900 uppercase tracking-wider bg-blue-50/50">Lead Time Delivery</th>
+                            
+                            <th class="p-3 text-left font-bold text-indigo-900 uppercase tracking-wider bg-indigo-50/50">Tgl Terima DT (Logistics)</th>
+                            <th class="p-3 text-left font-bold text-indigo-900 uppercase tracking-wider bg-indigo-50/50">Lead Time DT Return</th>
+                            
+                            <th class="p-3 text-center font-bold text-slate-500 uppercase tracking-wider">Status Order</th>
+                            <th class="p-3 text-center font-bold text-slate-500 uppercase tracking-wider w-20">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                <span class="text-[10px] font-bold text-slate-500 uppercase" id="rowCount">Showing 0 entries</span>
+                <span class="text-[10px] text-slate-400">© 2026 Giyas • PT Jotun Logistics</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalData = [];
+        let selectedDTs = new Set();
+        let html5QrcodeScanner = null;
+
+        function getSLATarget(transporterName) {
+            if (!transporterName) return null;
+            const clean = transporterName.toUpperCase().replace(/[\.\-]/g, '').trim();
+            
+            if (clean.includes("WIRA TRANS MANDIRI")) return 1;
+            if (clean.includes("ELTRANS")) return 1;
+            if (clean.includes("YAS TRANS SARELINDO")) return 1;
+            if (clean.includes("ABELLE")) return 1;
+            if (clean.includes("RESWARA PRIMA EXPRESS")) return 2;
+            if (clean.includes("MAERSK")) return 2;
+            if (clean.includes("HUMALA GIAT MANDIRI")) return 7;
+            
+            return null;
+        }
+
+        async function init() {
+            const local = localStorage.getItem('jotrans_local_db');
+            if (local) { 
+                globalData = JSON.parse(local); 
+                renderTable(globalData); 
+            }
+            try {
+                const docSnap = await window.getDoc(window.doc(window.db, "monitoring_dt", "current_status"));
+                if (docSnap.exists()) { syncData(docSnap.data().items); }
+            } catch (e) { console.log("Offline mode active"); }
+        }
+        setTimeout(init, 1000);
+
+        function cleanDateFormat(dateVal) {
+            if (!dateVal) return '';
+            dateVal = String(dateVal).trim();
+            if (dateVal === '-' || dateVal === '0') return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+            if (dateVal.includes('/')) {
+                const parts = dateVal.split('/');
+                if(parts.length === 3) {
+                    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+                    return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                }
+            }
+            return dateVal;
+        }
+
+        document.getElementById('uploadInput').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            toggleLoader(true);
+            reader.onload = (evt) => {
+                const workbook = XLSX.read(new Uint8Array(evt.target.result), {type: 'array'});
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const newData = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: "yyyy-mm-dd" });
+                
+                newData.forEach(newItem => {
+                    const dt = String(newItem['Delivery Ticket'] || newItem['DT'] || '');
+                    if (!dt || dt === '-') return;
+
+                    const rawStuffing = newItem['Stuffing Date'] || newItem['STUFFING'] || newItem['Tgl Stuffing'] || newItem['Stuffing'] || '';
+                    let rawReceivedBarang = newItem['Received Date'] || newItem['Tgl Diterima Barang'] || newItem['Tgl Diterima'] || '';
+                    let rawReceivedDT = newItem['Returned Date'] || newItem['Tgl Diterima DT'] || newItem['Tgl Kembali DT'] || '';
+
+                    const idx = globalData.findIndex(o => String(o['Delivery Ticket'] || o['DT']) === dt);
+                    const item = { 
+                        ...newItem, 
+                        'Tgl Diterima Barang': cleanDateFormat(rawReceivedBarang),
+                        'Tgl Diterima DT': cleanDateFormat(rawReceivedDT),
+                        'Tgl Stuffing': cleanDateFormat(rawStuffing),
+                        'CO No': newItem['CO No'] || newItem['Order No'] || newItem['Order'] || '-'
+                    };
+                    if (idx !== -1) globalData[idx] = { ...globalData[idx], ...item };
+                    else globalData.push(item);
+                });
+                saveAndRender();
+                showMsg("Data Imported!", "bg-blue-600 text-white");
+                toggleLoader(false);
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
+        });
+
+        function hitungSelisihHari(tglAwal, tglAkhir) {
+            if (!tglAwal || !tglAkhir) return null;
+            const awal = new Date(tglAwal);
+            const akhir = new Date(tglAkhir);
+            if (isNaN(awal.getTime()) || isNaN(akhir.getTime())) return null;
+            awal.setHours(0,0,0,0);
+            akhir.setHours(0,0,0,0);
+            const diffTime = akhir - awal;
+            return Math.round(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        function calculateDashboardMetrics(data) {
+            const total = data.length;
+            let countSelesai = 0;
+            let countOnTimeDelivery = 0;
+            let countOnTimeReturn = 0;
+            let totalDelivered = 0;
+            let totalReturned = 0;
+
+            data.forEach(row => {
+                const transporter = row['Transporter'] || '';
+                const stuffingDate = row['Tgl Stuffing'] || '';
+                const tglBarang = row['Tgl Diterima Barang'] || '';
+                const tglDT = row['Tgl Diterima DT'] || '';
+
+                const targetSLA = getSLATarget(transporter);
+                const targetSLADT = targetSLA ? targetSLA * 2 : null;
+
+                if (tglBarang && tglDT) countSelesai++;
+
+                if (tglBarang && stuffingDate && targetSLA) {
+                    totalDelivered++;
+                    const hariKiriman = hitungSelisihHari(stuffingDate, tglBarang);
+                    if (hariKiriman !== null && hariKiriman <= targetSLA) countOnTimeDelivery++;
+                }
+
+                if (tglDT && stuffingDate && targetSLADT) {
+                    totalReturned++;
+                    const hariDT = hitungSelisihHari(stuffingDate, tglDT);
+                    if (hariDT !== null && hariDT <= targetSLADT) countOnTimeReturn++;
+                }
+            });
+
+            const selesaiPercent = total > 0 ? Math.round((countSelesai / total) * 100) : 0;
+            const deliveryPercent = totalDelivered > 0 ? Math.round((countOnTimeDelivery / totalDelivered) * 100) : 0;
+            const returnPercent = totalReturned > 0 ? Math.round((countOnTimeReturn / totalReturned) * 100) : 0;
+
+            document.getElementById('dashTotal').innerText = total;
+            document.getElementById('dashSelesaiPercent').innerText = `${selesaiPercent}%`;
+            document.getElementById('dashDeliveryPercent').innerText = `${deliveryPercent}%`;
+            document.getElementById('dashReturnPercent').innerText = `${returnPercent}%`;
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            document.getElementById('rowCount').innerText = `Showing ${data.length} entries`;
+
+            calculateDashboardMetrics(data);
+
+            data.forEach((row) => {
+                const dt = String(row['Delivery Ticket'] || row['DT'] || '-');
+                const isSelected = selectedDTs.has(dt);
+                
+                const transporter = row['Transporter'] || '-';
+                const stuffingDate = row['Tgl Stuffing'] || '';
+                const tglBarang = row['Tgl Diterima Barang'] || '';
+                const tglDT = row['Tgl Diterima DT'] || '';
+
+                const targetSLA = getSLATarget(transporter);
+                const targetSLADT = targetSLA ? targetSLA * 2 : null;
+                
+                let badgeSLA = `<span class="text-slate-400 text-[10px]">Tgt: ${targetSLA || '-'} Hari</span>`;
+                let badgeSLADT = `<span class="text-slate-400 text-[10px]">Tgt: ${targetSLADT || '-'} Hari</span>`;
+                
+                let isBarangDone = false;
+                let isDTDone = false;
+
+                if (targetSLA && stuffingDate) {
+                    if (tglBarang) {
+                        isBarangDone = true;
+                        const hariKiriman = hitungSelisihHari(stuffingDate, tglBarang);
+                        if (hariKiriman !== null) {
+                            badgeSLA = hariKiriman <= targetSLA 
+                                ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 ON TIME (${hariKiriman}/${targetSLA}H)</span>`
+                                : `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 LATE (${hariKiriman}/${targetSLA}H)</span>`;
+                        }
+                    } else {
+                        badgeSLA = `<span class="text-amber-600 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLA}H)</span>`;
+                    }
+
+                    if (tglDT) {
+                        isDTDone = true;
+                        const hariDT = hitungSelisihHari(stuffingDate, tglDT);
+                        if (hariDT !== null) {
+                            badgeSLADT = hariDT <= targetSLADT 
+                                ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 OK (${hariDT}/${targetSLADT}H)</span>`
+                                : `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 OVER (${hariDT}/${targetSLADT}H)</span>`;
+                        }
+                    } else {
+                        badgeSLADT = `<span class="text-amber-600 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLADT}H)</span>`;
+                    }
+                }
+
+                const isOrderComplete = isBarangDone && isDTDone;
+                let badgeStatusUtama = `<span class="bg-slate-100 text-slate-600 border border-slate-200 font-extrabold px-2 rounded-full text-[10px]">ON PROGRESS</span>`;
+                if(isOrderComplete) {
+                    badgeStatusUtama = `<span class="bg-emerald-600 text-white font-extrabold px-2 py-0.5 rounded-full text-[10px] shadow-sm"><i class="fas fa-check-circle mr-1"></i> SELESAI</span>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.id = `row-${dt}`;
+                tr.className = `hover:bg-slate-50 transition-colors ${isOrderComplete ? 'bg-emerald-50 text-emerald-900' : ''}`;
+                
+                tr.innerHTML = `
+                    <td class="p-3 text-center">
+                        <input type="checkbox" onchange="toggleSelect('${dt}')" ${isSelected ? 'checked' : ''} class="w-4 h-4 rounded border-gray-300 text-blue-900 focus:ring-blue-900">
+                    </td>
+                    <td class="p-3 font-bold text-slate-700">${dt}</td>
+                    <td class="p-3 text-blue-600 font-semibold">${row['CO No'] || '-'}</td>
+                    <td class="p-3 text-slate-500 font-medium">${transporter}</td>
+                    <td class="p-3 font-bold text-orange-600">${stuffingDate || '-'}</td>
+                    
+                    <td class="p-3 bg-blue-50/10">
+                        <input type="date" value="${tglBarang}" onchange="updateDate('${dt}', 'Tgl Diterima Barang', this.value)" 
+                            class="p-0.5 border border-slate-200 bg-white font-semibold text-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none w-full max-w-[130px]">
+                    </td>
+                    <td class="p-3 bg-blue-50/10">${badgeSLA}</td>
+                    
+                    <td class="p-3 bg-indigo-50/10">
+                        <input type="date" value="${tglDT}" onchange="updateDate('${dt}', 'Tgl Diterima DT', this.value)" 
+                            class="p-0.5 border border-slate-200 bg-white font-semibold text-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none w-full max-w-[130px]">
+                    </td>
+                    <td class="p-3 bg-indigo-50/10">${badgeSLADT}</td>
+                    
+                    <td class="p-3 text-center">${badgeStatusUtama}</td>
+                    
+                    <td class="p-3 text-center">
+                        <button onclick="deleteOne('${dt}')" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition" title="Hapus item ini">
+                            <i class="fas fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            updateDeleteButton();
+        }
+
+        // --- CORE FUNCTIONS ---
+
+        function updateDate(dtID, field, dateVal) {
+            const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === String(dtID));
+            if (idx !== -1) {
+                globalData[idx][field] = dateVal;
+                
+                if (field === 'Tgl Diterima DT' && dateVal && !globalData[idx]['Tgl Diterima Barang']) {
+                    globalData[idx]['Tgl Diterima Barang'] = dateVal;
+                }
+
+                saveAndRender();
+            }
+        }
+
+        function toggleSelect(dt) {
+            if (selectedDTs.has(dt)) selectedDTs.delete(dt);
+            else selectedDTs.add(dt);
+            updateDeleteButton();
+        }
+
+        function toggleSelectAll() {
+            const masterCb = document.getElementById('selectAll');
+            if (masterCb.checked) {
+                globalData.forEach(row => selectedDTs.add(String(row['Delivery Ticket'] || row['DT'])));
+            } else {
+                selectedDTs.clear();
+            }
+            renderTable(globalData);
+        }
+
+        function updateDeleteButton() {
+            const btn = document.getElementById('btnDelete');
+            const count = document.getElementById('selectedCount');
+            if (selectedDTs.size > 0) {
+                btn.classList.remove('hidden');
+                count.innerText = selectedDTs.size;
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        function deleteOne(dt) {
+            if (confirm(`Hapus data Delivery Ticket: ${dt}?`)) {
+                globalData = globalData.filter(row => String(row['Delivery Ticket'] || row['DT']) !== String(dt));
+                if(selectedDTs.has(dt)) selectedDTs.delete(dt);
+                saveAndRender();
+                showMsg("Data Deleted", "bg-red-600 text-white");
+            }
+        }
+
+        function deleteSelected() {
+            if (confirm(`Hapus ${selectedDTs.size} data terpilih?`)) {
+                globalData = globalData.filter(row => !selectedDTs.has(String(row['Delivery Ticket'] || row['DT'])));
+                selectedDTs.clear();
+                document.getElementById('selectAll').checked = false;
+                saveAndRender();
+                showMsg("Data Deleted", "bg-red-600 text-white");
+            }
+        }
+
+        // --- CAMERA HP SCANNER ENGINE ---
+
+        function openScanner() {
+            document.getElementById('scannerModal').classList.remove('hidden');
+            document.getElementById('scanResult').innerText = "Menginisialisasi Kamera Belakang...";
+            
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                fps: 15, 
+                qrbox: { width: 280, height: 160 },
+                rememberLastUsedCamera: true,
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            });
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function closeScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(err => console.error(err));
+            }
+            document.getElementById('scannerModal').classList.add('hidden');
+        }
+
+    function onScanSuccess(decodedText, decodedResult) {
+    // Membersihkan spasi di awal/akhir teks hasil scan
+    const cleanedText = decodedText.trim(); 
+    document.getElementById('scanResult').innerHTML = `<span class="text-emerald-600 font-bold">Terbaca: ${cleanedText}</span>`;
+    
+    // Mencari baris data berdasarkan nomor "Delivery Ticket" atau "DT"
+    const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT'] || '').trim() === cleanedText);
+    
+    if (idx !== -1) {
+        closeScanner(); // Matikan kamera setelah berhasil scan
+        
+        // Mengambil tanggal hari ini (Format: YYYY-MM-DD)
+        const today = new Date().toISOString().split('T')[0];
+        
+        // OTOMATIS MENGISI TANGGAL TERIMA DT
+        globalData[idx]['Tgl Diterima DT'] = today;
+        
+        // Simpan perubahan ke Local Storage & perbarui tampilan tabel
+        saveAndRender(); 
+
+        // Efek otomatis gulung (scroll) layar ke baris yang baru di-update agar langsung kelihatan
+        const targetRow = document.getElementById(`row-${cleanedText}`);
+        if (targetRow) {
+            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetRow.classList.add('bg-emerald-50', 'transition-all', 'duration-500');
+            setTimeout(() => targetRow.classList.remove('bg-emerald-50'), 4000);
+        }
+        
+        showMsg(`DT ${cleanedText} Berhasil Diterima!`, "bg-emerald-600 text-white");
+    } else {
+        // Jika nomor DT tidak ditemukan di database tabel saat itu
+        document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak ditemukan di list!</span>`;
+    }
+}
+
+        function onScanFailure(error) {}
+
+        // --- FILTERING LOGIC ---
+
+        function handleGlobalSearch() {
+            const val = document.getElementById('globalSearch').value.toLowerCase();
+            const filtered = globalData.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(val)));
+            renderTable(filtered);
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
+            renderTable(globalData);
+        }
+
+        async function uploadToFirebase() {
+            toggleLoader(true);
+            try {
+                await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
+                showMsg("Synced to Cloud!", "bg-emerald-600 text-white");
+            } catch (e) {
+                showMsg("Sync Failed!", "bg-red-600 text-white");
+            }
+            toggleLoader(false);
+        }
+
+        function syncData(cloudItems) {
+            cloudItems.forEach(cItem => {
+                const dt = String(cItem['Delivery Ticket'] || cItem['DT'] || '');
+                const idx = globalData.findIndex(l => String(l['Delivery Ticket'] || l['DT']) === dt);
+                if (idx === -1) globalData.push(cItem);
+                else globalData[idx] = { ...globalData[idx], ...cItem };
+            });
+            saveAndRender();
+        }
+
+        function showMsg(t, c) {
+            const el = document.getElementById('statusMsg');
+            el.innerText = t; el.className = `px-3 py-1.5 rounded-lg font-bold text-[10px] ${c}`;
+            el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 2500);
+        }
+
+        function toggleLoader(show) {
+            document.getElementById('loader').style.display = show ? 'flex' : 'none';
+        }
+    </script>
+</body>
+</html>
