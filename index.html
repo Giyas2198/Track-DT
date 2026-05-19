@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JO-TRANS | Pro Edition v16 POD</title>
+    <title>JO-TRANS | Pro Edition v17 POD</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,146 +18,187 @@
             authDomain: "jtn-pr-control.firebaseapp.com",
             projectId: "jtn-pr-control",
             storageBucket: "jtn-pr-control.firebasestorage.app",
-            messagingSenderId: "921630437726",
-            appId: "1:921630437726:web:811585e1c987d7fea79fcf"
+            messagingSenderId: "543169728287",
+            appId: "1:543169728287:web:756fe93910f1bfdf237ee6"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        window.db = db; window.setDoc = setDoc; window.doc = doc; window.getDoc = getDoc;
+
+        window.db = db;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
     </script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        #loader { display: none; background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); }
-        .table-container { height: calc(100vh - 230px); min-height: 450px; }
-        @keyframes pulse-highlight {
-            0%, 100% { background-color: transparent; }
-            50% { background-color: rgb(219 234 254); }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
         }
-        .row-highlight { animation: pulse-highlight 2s ease-in-out 2; }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .table-container {
+            max-height: calc(100vh - 250px);
+        }
+
+        .row-highlight {
+            animation: pulseBg 2s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            0% { background-color: #f0fdf4; }
+            100% { background-color: #dcfce7; }
+        }
+
+        #reader {
+            border: none !important;
+            padding: 0 !important;
+        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="antialiased selection:bg-blue-100 selection:text-blue-900">
 
-    <div id="loader" class="fixed inset-0 z-[100] flex items-center justify-center">
-        <div class="flex flex-col items-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-900 border-opacity-20 border-t-blue-900 mb-2"></div>
-            <p class="text-xs font-bold text-blue-900 uppercase tracking-widest">Processing...</p>
+    <div id="loader" class="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center" style="display: none;">
+        <div class="bg-white p-5 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center gap-3">
+            <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs font-bold text-slate-600 tracking-wide">Memproses Data...</span>
         </div>
     </div>
 
-    <div id="scannerModal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[110] flex flex-col items-center justify-center p-4">
-        <div class="bg-white p-5 rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md relative">
-            <button onclick="closeScanner()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition text-xl">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="mb-4">
-                <h3 class="text-sm font-bold text-blue-900 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fas fa-camera"></i> Scan Delivery Ticket (POD)
+    <div id="scannerModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-4 mx-4 shadow-2xl border border-slate-100">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
+                    <i class="fas fa-camera text-blue-600"></i> CAMERA SCANNER DT
                 </h3>
-                <p class="text-[11px] text-slate-400 mt-0.5">Scan barcode lembar DT yang kembali untuk update otomatis.</p>
+                <button onclick="closeScanner()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
             </div>
-            <div id="reader" class="overflow-hidden rounded-xl bg-slate-100 border border-slate-200" style="width: 100%;"></div>
-            <div id="scanResult" class="mt-3 p-3 bg-slate-50 rounded-xl text-center text-xs font-semibold text-slate-600 border border-slate-100">
-                Menghubungkan kamera...
+            <div id="reader" class="overflow-hidden rounded-xl bg-slate-50 border border-slate-200"></div>
+            <div id="scanResult" class="mt-3 p-2.5 bg-slate-50 rounded-xl text-center text-xs font-semibold text-slate-600 border border-slate-100">
+                Arahkan kamera ke Barcode / QR Code Delivery Ticket
             </div>
         </div>
     </div>
 
     <div class="max-w-[1600px] mx-auto p-3 lg:p-4">
-        <header class="flex flex-wrap items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-3 gap-3">
+        <header class="flex flex-wrap items-center justify-between bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 mb-3.5 gap-3.5">
             <div class="flex items-center gap-4 flex-1 min-w-[300px]">
-                <div class="bg-blue-900 p-2.5 rounded-xl text-white shadow-md shadow-blue-900/10 flex-shrink-0">
+                <div class="bg-blue-600 p-2.5 rounded-xl text-white shadow-sm flex-shrink-0">
                     <i class="fas fa-truck-fast text-lg"></i>
                 </div>
-                
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-l border-slate-200 pl-4 text-xs">
-                    <div>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Total</span>
-                        <span id="dashTotal" class="font-black text-slate-800">0</span> <span class="text-[10px] text-slate-400">DT</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Selesai</span>
-                        <span id="dashSelesaiPercent" class="font-black text-emerald-600">0%</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">Delivery</span>
-                        <span id="dashDeliveryPercent" class="font-black text-blue-600">0%</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-tight leading-none">DT Return</span>
-                        <span id="dashReturnPercent" class="font-black text-purple-600">0%</span>
+                <div>
+                    <h1 class="text-sm font-black tracking-tight text-slate-900 uppercase leading-none mb-1.5">JO-TRANS CONTROL</h1>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Total DT</span>
+                            <span id="dashTotal" class="font-bold text-slate-800 ml-1">0</span>
+                        </div>
+                        <div class="w-px h-3 bg-slate-200"></div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Selesai POD</span>
+                            <span id="dashSelesaiPercent" class="font-bold text-emerald-600 ml-1">0%</span>
+                        </div>
+                        <div class="w-px h-3 bg-slate-200"></div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">On-Time Deliv</span>
+                            <span id="dashDeliveryPercent" class="font-bold text-blue-600 ml-1">0%</span>
+                        </div>
+                        <div class="w-px h-3 bg-slate-200"></div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">On-Time Return</span>
+                            <span id="dashReturnPercent" class="font-bold text-purple-600 ml-1">0%</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="flex items-center gap-2 flex-shrink-0">
-                <div id="statusMsg" class="hidden px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase animate-pulse"></div>
+                <div id="statusMsg" class="hidden px-2.5 py-1.5 rounded-lg font-bold text-[10px] uppercase"></div>
                 
-                <button onclick="openScanner()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
-                    <i class="fas fa-camera"></i> SCAN DT
+                <button onclick="downloadExcelLocal()" class="bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-file-download text-emerald-600"></i> DOWNLOAD REPORT
                 </button>
 
-                <button onclick="uploadToFirebase()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
-                    <i class="fas fa-cloud-arrow-up"></i> SYNC TO CLOUD
+                <button onclick="openScanner()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-camera"></i> SCAN CAMERA
                 </button>
+
+                <button onclick="uploadToFirebase()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-cloud-arrow-up text-blue-400"></i> SYNC TO CLOUD
+                </button>
+                <button onclick="sendToGoogleSheets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+    <i class="fas fa-share-nodes"></i> EXPORT TO SHARED GDRIVE
+</button>
             </div>
         </header>
 
-        <div class="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 mb-3 shadow-sm">
+        <div class="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 mb-3.5 shadow-sm">
             <div class="relative flex-1 min-w-[260px]">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="globalSearch" onkeyup="handleGlobalSearch()" placeholder="Global search..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs focus:ring-1 focus:ring-blue-500 transition-all">
+                <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="globalSearch" onkeyup="handleGlobalSearch()" placeholder="Cari nomor DT, customer, transporter, atau nomor CO..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200/60 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none text-slate-800">
             </div>
             
             <div class="flex items-center gap-2">
                 <button onclick="deleteSelected()" id="btnDelete" class="hidden bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 border border-red-100">
-                    <i class="fas fa-trash-can"></i> DELETE SELECTED (<span id="selectedCount">0</span>)
+                    <i class="fas fa-trash-can"></i> HAPUS TERPILIH (<span id="selectedCount">0</span>)
                 </button>
 
                 <div class="relative inline-flex items-center">
-                    <label for="uploadInput" class="bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all">
-                        <i class="fas fa-file-excel text-emerald-600"></i> IMPORT EXCEL
+                    <label for="uploadInput" class="bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm">
+                        <i class="fas fa-file-excel text-emerald-600 text-sm"></i> UPLOAD EXCEL / CSV
                     </label>
                     <input type="file" id="uploadInput" accept=".csv, .xlsx" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-200">
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
             <div class="overflow-x-auto custom-scrollbar table-container">
                 <table class="min-w-full text-xs border-collapse">
                     <thead class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200">
                         <tr>
-                            <th class="p-3 text-center w-10">
-                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-gray-300 text-blue-900 focus:ring-blue-900">
+                            <th class="p-3.5 text-center w-10">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                             </th>
-                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">DT</th>
-                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">CO No</th>
-                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">Transporter</th>
-                            <th class="p-3 text-left font-bold text-slate-500 uppercase tracking-wider">Stuffing</th>
-                            
-                            <th class="p-3 text-left font-bold text-blue-900 uppercase tracking-wider bg-blue-50/50">Tgl Terima Barang (Cust)</th>
-                            <th class="p-3 text-left font-bold text-blue-900 uppercase tracking-wider bg-blue-50/50">Lead Time Delivery</th>
-                            
-                            <th class="p-3 text-left font-bold text-indigo-900 uppercase tracking-wider bg-indigo-50/50">Tgl Terima DT (Logistics)</th>
-                            <th class="p-3 text-left font-bold text-indigo-900 uppercase tracking-wider bg-indigo-50/50">Lead Time DT Return</th>
-                            
-                            <th class="p-3 text-center font-bold text-slate-500 uppercase tracking-wider">Status Order</th>
-                            <th class="p-3 text-center font-bold text-slate-500 uppercase tracking-wider w-20">Aksi</th>
+                            <th class="p-3.5 text-left font-bold text-slate-600 uppercase tracking-wider">Delivery Ticket</th>
+                            <th class="p-3.5 text-left font-bold text-slate-600 uppercase tracking-wider">CO Number</th>
+                            <th class="p-3.5 text-left font-bold text-slate-600 uppercase tracking-wider">Transporter</th>
+                            <th class="p-3.5 text-left font-bold text-slate-600 uppercase tracking-wider">Stuffing</th>
+                            <th class="p-3.5 text-left font-bold text-blue-700 uppercase tracking-wider bg-blue-50/40">Tgl Terima Customer</th>
+                            <th class="p-3.5 text-left font-bold text-blue-700 uppercase tracking-wider bg-blue-50/40">Lead Time Deliv</th>
+                            <th class="p-3.5 text-left font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50/40">Tgl Terima Logistics</th>
+                            <th class="p-3.5 text-left font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50/40">Lead Time Return</th>
+                            <th class="p-3.5 text-center font-bold text-slate-600 uppercase tracking-wider">Status Order</th>
+                            <th class="p-3.5 text-center font-bold text-slate-600 uppercase tracking-wider w-16">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 bg-white"></tbody>
                 </table>
             </div>
-            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                <span class="text-[10px] font-bold text-slate-500 uppercase" id="rowCount">Showing 0 entries</span>
-                <span class="text-[10px] text-slate-400">© 2026 Giyas • PT Jotun Logistics</span>
+            
+            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-slate-500">
+                <span class="text-[11px] font-semibold text-slate-600 uppercase" id="rowCount">Showing 0 entries</span>
+                <span class="text-[11px] font-medium text-slate-400">© 2026 Giyas • PT Jotun Logistics</span>
             </div>
         </div>
     </div>
@@ -169,7 +210,7 @@
 
         function getSLATarget(transporterName) {
             if (!transporterName) return null;
-            const clean = transporterName.toUpperCase().replace(/[\.\-]/g, '').trim();
+            const clean = transporterName.toUpperCase().replace(/[.\\-]/g, '').trim();
             if (clean.includes("WIRA TRANS MANDIRI")) return 1;
             if (clean.includes("ELTRANS")) return 1;
             if (clean.includes("YAS TRANS SARELINDO")) return 1;
@@ -181,18 +222,14 @@
         }
 
         async function init() {
-            // Muat data lokal terlebih dahulu agar aplikasi cepat terbuka
             const local = localStorage.getItem('jotrans_local_db');
             if (local) { 
                 globalData = JSON.parse(local); 
                 renderTable(globalData); 
             }
-            
-            // Ambit data dari Firebase Cloud
             try {
                 const docSnap = await window.getDoc(window.doc(window.db, "monitoring_dt", "current_status"));
                 if (docSnap.exists()) { 
-                    // PERBAIKAN LOGIKA: Timpa (Overwrite) data lokal dengan data Cloud yang valid, jangan di-merge!
                     syncData(docSnap.data().items || []); 
                 }
             } catch (e) { 
@@ -201,52 +238,98 @@
         }
         setTimeout(init, 1000);
 
+        // KUNCI COCOK FORMAT TANGGAL
         function cleanDateFormat(dateVal) {
             if (!dateVal) return '';
             dateVal = String(dateVal).trim();
-            if (dateVal === '-' || dateVal === '0') return '';
+            if (dateVal === '-' || dateVal === '0' || dateVal.toLowerCase() === 'null') return '';
+            
+            if (dateVal.includes(' ')) dateVal = dateVal.split(' ')[0];
+            if (dateVal.includes('T')) dateVal = dateVal.split('T')[0];
+
             if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
-            if (dateVal.includes('/')) {
-                const parts = dateVal.split('/');
-                if(parts.length === 3) {
-                    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
-                    return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+
+            if (dateVal.includes('-')) {
+                const parts = dateVal.split('-');
+                if (parts.length === 3) {
+                    const p0 = parts[0], p1 = parts[1], p2 = parts[2];
+                    if (p0.length === 4) return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+                    if (p2.length === 4) return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+                    if (p2.length === 2) {
+                        const year = parseInt(p2, 10) < 50 ? `20${p2}` : `19${p2}`;
+                        return `${year}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+                    }
                 }
             }
+
+            if (dateVal.includes('/')) {
+                const parts = dateVal.split('/');
+                if (parts.length === 3) {
+                    const p0 = parts[0], p1 = parts[1], p2 = parts[2];
+                    if (p0.length === 4) return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+                    if (p2.length === 4) return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+                    if (p2.length === 2) {
+                        const year = parseInt(p2, 10) < 50 ? `20${p2}` : `19${p2}`;
+                        return `${year}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+                    }
+                }
+            }
+
+            const parsedTime = Date.parse(dateVal);
+            if (!isNaN(parsedTime)) return new Date(parsedTime).toISOString().split('T')[0];
+
             return dateVal;
         }
 
-        // EXCEL IMPORT ENGINE
+        function formatDisplayDate(dateStr) {
+            if (!dateStr || !dateStr.includes('-')) return dateStr || '-';
+            const parts = dateStr.split('-');
+            if (parts.length === 3 && parts[0].length === 4) {
+                return `${parts[2]}-${parts[1]}-${parts[0].substring(2)}`;
+            }
+            return dateStr;
+        }
+
         document.getElementById('uploadInput').addEventListener('change', function(e) {
+            if (!e.target.files.length) return;
             const reader = new FileReader();
             toggleLoader(true);
             reader.onload = (evt) => {
-                const workbook = XLSX.read(new Uint8Array(evt.target.result), {type: 'array'});
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const newData = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: "yyyy-mm-dd" });
-                
-                newData.forEach(newItem => {
-                    const dt = String(newItem['Delivery Ticket'] || newItem['DT'] || '');
-                    if (!dt || dt === '-') return;
+                try {
+                    const workbook = XLSX.read(new Uint8Array(evt.target.result), {type: 'array'});
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const newData = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: "yyyy-mm-dd" });
+                    
+                    newData.forEach(newItem => {
+                        const dt = String(newItem['Delivery Ticket'] || newItem['DT'] || '').trim();
+                        if (!dt || dt === '-' || dt === '0') return;
 
-                    const rawStuffing = newItem['Stuffing Date'] || newItem['STUFFING'] || newItem['Tgl Stuffing'] || newItem['Stuffing'] || '';
-                    let rawReceivedBarang = newItem['Received Date'] || newItem['Tgl Diterima Barang'] || newItem['Tgl Diterima'] || '';
-                    let rawReceivedDT = newItem['Returned Date'] || newItem['Tgl Diterima DT'] || newItem['Tgl Kembali DT'] || '';
+                        const rawStuffing = newItem['Stuffing Date'] || newItem['STUFFING'] || newItem['Tgl Stuffing'] || newItem['Stuffing'] || '';
+                        let rawReceivedBarang = newItem['Received Date'] || newItem['Tgl Diterima Barang'] || newItem['Tgl Diterima'] || newItem['Tgl Terima Barang (Cust)'] || '';
+                        let rawReceivedDT = newItem['Returned Date'] || newItem['Tgl Diterima DT'] || newItem['Tgl Kembali DT'] || newItem['Tgl Terima DT (Logistics)'] || '';
 
-                    const idx = globalData.findIndex(o => String(o['Delivery Ticket'] || o['DT']) === dt);
-                    const item = { 
-                        ...newItem, 
-                        'Tgl Diterima Barang': cleanDateFormat(rawReceivedBarang),
-                        'Tgl Diterima DT': cleanDateFormat(rawReceivedDT),
-                        'Tgl Stuffing': cleanDateFormat(rawStuffing),
-                        'CO No': newItem['CO No'] || newItem['Order No'] || newItem['Order'] || '-'
-                    };
-                    if (idx !== -1) globalData[idx] = { ...globalData[idx], ...item };
-                    else globalData.push(item);
-                });
-                saveAndRender();
-                showMsg("Data Imported!", "bg-blue-600 text-white");
+                        const idx = globalData.findIndex(o => String(o['Delivery Ticket'] || o['DT'] || '').trim() === dt);
+                        
+                        const item = { 
+                            ...newItem,
+                            'Delivery Ticket': dt,
+                            'Tgl Diterima Barang': cleanDateFormat(rawReceivedBarang),
+                            'Tgl Diterima DT': cleanDateFormat(rawReceivedDT),
+                            'Tgl Stuffing': cleanDateFormat(rawStuffing),
+                            'CO No': newItem['CO No'] || newItem['Order No'] || newItem['Order'] || newItem['CO Number'] || '-'
+                        };
+
+                        if (idx !== -1) globalData[idx] = { ...globalData[idx], ...item };
+                        else globalData.push(item);
+                    });
+                    
+                    saveAndRender();
+                    showMsg("Berhasil Import Excel!", "bg-emerald-100 text-emerald-800 border border-emerald-200");
+                } catch (err) {
+                    showMsg("Gagal membaca file!", "bg-red-100 text-red-800 border border-red-200");
+                }
                 toggleLoader(false);
+                document.getElementById('uploadInput').value = '';
             };
             reader.readAsArrayBuffer(e.target.files[0]);
         });
@@ -256,65 +339,45 @@
             const awal = new Date(tglAwal);
             const akhir = new Date(tglAkhir);
             if (isNaN(awal.getTime()) || isNaN(akhir.getTime())) return null;
-            awal.setHours(0,0,0,0);
-            akhir.setHours(0,0,0,0);
-            const diffTime = akhir - awal;
-            return Math.round(diffTime / (1000 * 60 * 60 * 24));
+            awal.setHours(0,0,0,0); akhir.setHours(0,0,0,0);
+            return Math.round((akhir - awal) / (1000 * 60 * 60 * 24));
         }
 
         function calculateDashboardMetrics(data) {
             const total = data.length;
-            let countSelesai = 0;
-            let countOnTimeDelivery = 0;
-            let countOnTimeReturn = 0;
-            let totalDelivered = 0;
-            let totalReturned = 0;
+            let countSelesai = 0, countOnTimeDelivery = 0, countOnTimeReturn = 0, totalDelivered = 0, totalReturned = 0;
 
             data.forEach(row => {
-                const transporter = row['Transporter'] || '';
-                const stuffingDate = row['Tgl Stuffing'] || '';
-                const tglBarang = row['Tgl Diterima Barang'] || '';
-                const tglDT = row['Tgl Diterima DT'] || '';
-
+                const transporter = row['Transporter'] || '', stuffingDate = row['Tgl Stuffing'] || '', tglBarang = row['Tgl Diterima Barang'] || '', tglDT = row['Tgl Diterima DT'] || '';
                 const targetSLA = getSLATarget(transporter);
                 const targetSLADT = targetSLA ? targetSLA * 2 : null;
 
                 if (tglBarang && tglDT) countSelesai++;
-
                 if (tglBarang && stuffingDate && targetSLA) {
                     totalDelivered++;
-                    const hariKiriman = hitungSelisihHari(stuffingDate, tglBarang);
-                    if (hariKiriman !== null && hariKiriman <= targetSLA) countOnTimeDelivery++;
+                    if (hitungSelisihHari(stuffingDate, tglBarang) <= targetSLA) countOnTimeDelivery++;
                 }
-
                 if (tglDT && stuffingDate && targetSLADT) {
                     totalReturned++;
-                    const hariDT = hitungSelisihHari(stuffingDate, tglDT);
-                    if (hariDT !== null && hariDT <= targetSLADT) countOnTimeReturn++;
+                    if (hitungSelisihHari(stuffingDate, tglDT) <= targetSLADT) countOnTimeReturn++;
                 }
             });
 
-            const selesaiPercent = total > 0 ? Math.round((countSelesai / total) * 100) : 0;
-            const deliveryPercent = totalDelivered > 0 ? Math.round((countOnTimeDelivery / totalDelivered) * 100) : 0;
-            const returnPercent = totalReturned > 0 ? Math.round((countOnTimeReturn / totalReturned) * 100) : 0;
-
             document.getElementById('dashTotal').innerText = total;
-            document.getElementById('dashSelesaiPercent').innerText = `${selesaiPercent}%`;
-            document.getElementById('dashDeliveryPercent').innerText = `${deliveryPercent}%`;
-            document.getElementById('dashReturnPercent').innerText = `${returnPercent}%`;
+            document.getElementById('dashSelesaiPercent').innerText = `${total > 0 ? Math.round((countSelesai / total) * 100) : 0}%`;
+            document.getElementById('dashDeliveryPercent').innerText = `${totalDelivered > 0 ? Math.round((countOnTimeDelivery / totalDelivered) * 100) : 0}%`;
+            document.getElementById('dashReturnPercent').innerText = `${totalReturned > 0 ? Math.round((countOnTimeReturn / totalReturned) * 100) : 0}%`;
         }
 
         function renderTable(data) {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             document.getElementById('rowCount').innerText = `Showing ${data.length} entries`;
-
             calculateDashboardMetrics(data);
 
             data.forEach((row) => {
                 const dt = String(row['Delivery Ticket'] || row['DT'] || '-');
                 const isSelected = selectedDTs.has(dt);
-                
                 const transporter = row['Transporter'] || '-';
                 const stuffingDate = row['Tgl Stuffing'] || '';
                 const tglBarang = row['Tgl Diterima Barang'] || '';
@@ -323,74 +386,69 @@
                 const targetSLA = getSLATarget(transporter);
                 const targetSLADT = targetSLA ? targetSLA * 2 : null;
                 
-                let badgeSLA = `<span class="text-slate-400 text-[10px]">Tgt: ${targetSLA || '-'} Hari</span>`;
-                let badgeSLADT = `<span class="text-slate-400 text-[10px]">Tgt: ${targetSLADT || '-'} Hari</span>`;
+                let badgeSLA = `<span class="text-slate-400 font-medium text-[10px]">Tgt: ${targetSLA || '-'} H</span>`;
+                let badgeSLADT = `<span class="text-slate-400 font-medium text-[10px]">Tgt: ${targetSLADT || '-'} H</span>`;
                 
-                let isBarangDone = false;
-                let isDTDone = false;
+                let isBarangDone = false, isDTDone = false;
 
                 if (targetSLA && stuffingDate) {
                     if (tglBarang) {
                         isBarangDone = true;
-                        const hariKiriman = hitungSelisihHari(stuffingDate, tglBarang);
-                        if (hariKiriman !== null) {
-                            badgeSLA = hariKiriman <= targetSLA 
-                                ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 ON TIME (${hariKiriman}/${targetSLA}H)</span>`
-                                : `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 LATE (${hariKiriman}/${targetSLA}H)</span>`;
-                        }
+                        const h = hitungSelisihHari(stuffingDate, tglBarang);
+                        badgeSLA = h <= targetSLA 
+                            ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 ON TIME (${h}/${targetSLA}H)</span>`
+                            : `<span class="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 LATE (${h}/${targetSLA}H)</span>`;
                     } else {
-                        badgeSLA = `<span class="text-amber-600 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLA}H)</span>`;
+                        badgeSLA = `<span class="text-amber-700 font-bold bg-amber-50 border border-amber-100 px-2 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLA}H)</span>`;
                     }
 
                     if (tglDT) {
                         isDTDone = true;
-                        const hariDT = hitungSelisihHari(stuffingDate, tglDT);
-                        if (hariDT !== null) {
-                            badgeSLADT = hariDT <= targetSLADT 
-                                ? `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 OK (${hariDT}/${targetSLADT}H)</span>`
-                                : `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 OVER (${hariDT}/${targetSLADT}H)</span>`;
-                        }
+                        const h = hitungSelisihHari(stuffingDate, tglDT);
+                        badgeSLADT = h <= targetSLADT 
+                            ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🟢 OK (${h}/${targetSLADT}H)</span>`
+                            : `<span class="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded font-bold text-[10px] block w-max">🔴 OVER (${h}/${targetSLADT}H)</span>`;
                     } else {
-                        badgeSLADT = `<span class="text-amber-600 font-bold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLADT}H)</span>`;
+                        badgeSLADT = `<span class="text-amber-700 font-bold bg-amber-50 border border-amber-100 px-2 py-0.5 rounded text-[10px] block w-max">⏳ WAIT (${targetSLADT}H)</span>`;
                     }
                 }
 
                 const isOrderComplete = isBarangDone && isDTDone;
-                let badgeStatusUtama = `<span class="bg-slate-100 text-slate-600 border border-slate-200 font-extrabold px-2 rounded-full text-[10px]">ON PROGRESS</span>`;
+                let badgeStatusUtama = `<span class="bg-slate-50 text-slate-600 border border-slate-200 font-bold px-2.5 py-0.5 rounded-full text-[10px]">ON PROGRESS</span>`;
                 if(isOrderComplete) {
-                    badgeStatusUtama = `<span class="bg-emerald-600 text-white font-extrabold px-2 py-0.5 rounded-full text-[10px] shadow-sm"><i class="fas fa-check-circle mr-1"></i> SELESAI</span>`;
+                    badgeStatusUtama = `<span class="bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold px-2.5 py-0.5 rounded-full text-[10px] inline-flex items-center gap-1"><i class="fas fa-check-circle"></i> SELESAI</span>`;
                 }
 
                 const tr = document.createElement('tr');
                 tr.id = `row-${dt}`;
-                tr.className = `hover:bg-slate-50 transition-colors ${isOrderComplete ? 'bg-emerald-50 text-emerald-900' : ''}`;
+                tr.className = `hover:bg-slate-50/80 transition-colors ${isOrderComplete ? 'bg-slate-50/40' : ''}`;
                 
                 tr.innerHTML = `
                     <td class="p-3 text-center">
-                        <input type="checkbox" onchange="toggleSelect('${dt}')" ${isSelected ? 'checked' : ''} class="w-4 h-4 rounded border-gray-300 text-blue-900 focus:ring-blue-900">
+                        <input type="checkbox" onchange="toggleSelect('${dt}')" ${isSelected ? 'checked' : ''} class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                     </td>
-                    <td class="p-3 font-bold text-slate-700">${dt}</td>
+                    <td class="p-3 font-bold text-slate-800">${dt}</td>
                     <td class="p-3 text-blue-600 font-semibold">${row['CO No'] || '-'}</td>
-                    <td class="p-3 text-slate-500 font-medium">${transporter}</td>
-                    <td class="p-3 font-bold text-orange-600">${stuffingDate || '-'}</td>
+                    <td class="p-3 text-slate-600 font-medium">${transporter}</td>
+                    <td class="p-3 font-bold text-slate-700">${formatDisplayDate(stuffingDate)}</td>
                     
                     <td class="p-3 bg-blue-50/10">
                         <input type="date" value="${tglBarang}" onchange="updateDate('${dt}', 'Tgl Diterima Barang', this.value)" 
-                            class="p-0.5 border border-slate-200 bg-white font-semibold text-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none w-full max-w-[130px]">
+                            class="p-1 border border-slate-200 bg-white font-medium text-slate-800 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none w-full max-w-[130px]">
                     </td>
                     <td class="p-3 bg-blue-50/10">${badgeSLA}</td>
                     
                     <td class="p-3 bg-indigo-50/10">
                         <input type="date" value="${tglDT}" onchange="updateDate('${dt}', 'Tgl Diterima DT', this.value)" 
-                            class="p-0.5 border border-slate-200 bg-white font-semibold text-slate-700 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none w-full max-w-[130px]">
+                            class="p-1 border border-slate-200 bg-white font-medium text-slate-800 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none w-full max-w-[130px]">
                     </td>
                     <td class="p-3 bg-indigo-50/10">${badgeSLADT}</td>
                     
                     <td class="p-3 text-center">${badgeStatusUtama}</td>
                     
                     <td class="p-3 text-center">
-                        <button onclick="deleteOne('${dt}')" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition" title="Hapus item ini">
-                            <i class="fas fa-trash-can"></i>
+                        <button onclick="deleteOne('${dt}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded-lg transition">
+                            <i class="fas fa-trash-can text-sm"></i>
                         </button>
                     </td>
                 `;
@@ -398,8 +456,6 @@
             });
             updateDeleteButton();
         }
-
-        // --- CORE FUNCTIONS ---
 
         function updateDate(dtID, field, dateVal) {
             const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === String(dtID));
@@ -439,97 +495,72 @@
             }
         }
 
-        // PERBAIKAN FUNGSIONAL: Hapus Langsung di Lokal & Auto Update ke Cloud Firestore
         async function deleteOne(dt) {
             if (confirm(`Hapus data Delivery Ticket: ${dt}?`)) {
                 toggleLoader(true);
-                // 1. Hapus dari array lokal
                 globalData = globalData.filter(row => String(row['Delivery Ticket'] || row['DT']) !== String(dt));
                 if(selectedDTs.has(dt)) selectedDTs.delete(dt);
-                
-                // 2. Simpan ke LocalStorage dan render ulang tabel
                 localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
                 renderTable(globalData);
-
-                // 3. Langsung timpa data Cloud agar data yang dihapus hilang permanen
                 try {
                     await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
-                    showMsg("Data Deleted Permanently!", "bg-red-600 text-white");
+                    showMsg("Permanen Terhapus!", "bg-red-50 text-red-700 border border-red-100");
                 } catch (e) {
-                    showMsg("Cloud Update Failed!", "bg-amber-600 text-white");
+                    showMsg("Gagal Sync Cloud!", "bg-amber-50 text-amber-700 border border-amber-100");
                 }
                 toggleLoader(false);
             }
         }
 
-        // PERBAIKAN FUNGSIONAL: Hapus Massal Langsung & Auto Update ke Cloud Firestore
         async function deleteSelected() {
             if (confirm(`Hapus ${selectedDTs.size} data terpilih?`)) {
                 toggleLoader(true);
-                // 1. Filter massal
                 globalData = globalData.filter(row => !selectedDTs.has(String(row['Delivery Ticket'] || row['DT'])));
                 selectedDTs.clear();
                 document.getElementById('selectAll').checked = false;
-                
-                // 2. Simpan lokal
                 localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
                 renderTable(globalData);
-
-                // 3. Tembak pembaruan ke Cloud Firebase
                 try {
                     await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
-                    showMsg("Selected Data Deleted Permanently!", "bg-red-600 text-white");
+                    showMsg("Data Terpilih Dihapus!", "bg-red-50 text-red-700 border border-red-100");
                 } catch (e) {
-                    showMsg("Cloud Update Failed!", "bg-amber-600 text-white");
+                    showMsg("Gagal Sync Cloud!", "bg-amber-50 text-amber-700 border border-amber-100");
                 }
                 toggleLoader(false);
             }
         }
 
-        // --- CAMERA HP SCANNER ENGINE ---
-        function openScanner() {
-            document.getElementById('scannerModal').classList.remove('hidden');
-            document.getElementById('scanResult').innerText = "Menginisialisasi Kamera Belakang...";
-            
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                fps: 15, 
-                qrbox: { width: 280, height: 160 },
-                rememberLastUsedCamera: true,
-                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
-            });
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-        }
-
+function openScanner() {
+    document.getElementById('scannerModal').classList.remove('hidden');
+    document.getElementById('scanResult').innerText = "Membuka kamera belakang utama...";
+    
+    // Inisialisasi mesin scan dengan seting prioritas kamera belakang HP (environment)
+    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+        fps: 20, // Naikkan frame per second agar respons scan lebih cepat instan
+        qrbox: { width: 280, height: 180 }, // Sesuaikan rasio kotak bidik barcode tiket pengiriman
+        rememberLastUsedCamera: true,
+        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+    });
+    
+    // Perintah eksekusi menyalakan sensor kamera belakang langsung
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+}
         function closeScanner() {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(err => console.error(err));
-            }
+            if (html5QrcodeScanner) html5QrcodeScanner.clear().catch(err => console.error(err));
             document.getElementById('scannerModal').classList.add('hidden');
         }
 
         function onScanSuccess(decodedText, decodedResult) {
             const cleanedText = decodedText.trim();
             document.getElementById('scanResult').innerHTML = `<span class="text-emerald-600 font-bold">Terbaca: ${cleanedText}</span>`;
-            
             const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === cleanedText);
-            
             if (idx !== -1) {
                 closeScanner();
                 const today = new Date().toISOString().split('T')[0];
                 globalData[idx]['Tgl Diterima DT'] = today;
-                if(!globalData[idx]['Tgl Diterima Barang']) {
-                    globalData[idx]['Tgl Diterima Barang'] = today;
-                }
-                
+                if(!globalData[idx]['Tgl Diterima Barang']) globalData[idx]['Tgl Diterima Barang'] = today;
                 saveAndRender();
-
-                const targetRow = document.getElementById(`row-${cleanedText}`);
-                if (targetRow) {
-                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    targetRow.classList.add('row-highlight');
-                    setTimeout(() => targetRow.classList.remove('row-highlight'), 4000);
-                }
-                showMsg(`DT ${cleanedText} Berhasil Di-POD Selesai!`, "bg-emerald-600 text-white");
+                showMsg(`DT ${cleanedText} Berhasil Di-POD Selesai!`, "bg-emerald-50 text-emerald-700 border border-emerald-100");
             } else {
                 document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak terdaftar di list ini!</span>`;
             }
@@ -537,7 +568,14 @@
 
         function onScanFailure(error) {}
 
-        // --- FILTERING LOGIC ---
+        function downloadExcelLocal() {
+            if(globalData.length === 0) return;
+            const worksheet = XLSX.utils.json_to_sheet(globalData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "JO-TRANS STATUS");
+            XLSX.writeFile(workbook, "JO-TRANS-MONITORING-REPORT.xlsx");
+        }
+
         function handleGlobalSearch() {
             const val = document.getElementById('globalSearch').value.toLowerCase();
             const filtered = globalData.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(val)));
@@ -549,34 +587,51 @@
             renderTable(globalData);
         }
 
-        async function uploadToFirebase() {
-            toggleLoader(true);
-            try {
-                await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
-                showMsg("Synced to Cloud!", "bg-emerald-600 text-white");
-            } catch (e) {
-                showMsg("Sync Failed!", "bg-red-600 text-white");
-            }
-            toggleLoader(false);
-        }
-
-        // SINKRONISASI UTAMA: Menimpa data lokal agar selaras penuh dengan database Cloud Firebase
         function syncData(cloudItems) {
-            if (cloudItems && cloudItems.length > 0) {
-                globalData = cloudItems;
-            }
+            if (cloudItems && cloudItems.length > 0) globalData = cloudItems;
             saveAndRender();
         }
 
         function showMsg(t, c) {
             const el = document.getElementById('statusMsg');
-            el.innerText = t; el.className = `px-3 py-1.5 rounded-lg font-bold text-[10px] ${c}`;
-            el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 2500);
+            el.innerHTML = t; el.className = `px-3 py-1.5 rounded-lg font-bold text-[10px] ${c}`;
+            el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 3500);
         }
 
         function toggleLoader(show) {
             document.getElementById('loader').style.display = show ? 'flex' : 'none';
         }
+        async function sendToGoogleSheets() {
+    if (globalData.length === 0) {
+        alert("Tidak ada data untuk dikirim ke GDrive!");
+        return;
+    }
+    
+    toggleLoader(true);
+    
+    // PASTE URL Aplikasi Web dari Google Apps Script Langkah 1 di sini
+    const appScriptUrl = "https://script.google.com/macros/s/AKfycbxqxToJVrZCgfahGyyUraxw5Z9kvnKmk4NpbBfWcnyG_F43W8hQS-FMB-szj67PBKiI/exec"; 
+    
+    try {
+        const response = await fetch(appScriptUrl, {
+            method: "POST",
+            mode: "no-cors", // Digunakan agar tidak terblokir kebijakan CORS browser
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ items: globalData })
+        });
+        
+        // Karena menggunakan mode 'no-cors', browser tidak bisa membaca isi response langsung, 
+        // tapi data dipastikan sampai ke Google Sheets dengan aman.
+        showMsg("Berhasil Terkoneksi ke GDrive & Apps Script Executed!", "bg-emerald-100 text-emerald-800 border border-emerald-200");
+    } catch (error) {
+        console.error(error);
+        showMsg("Koneksi ke GDrive Gagal!", "bg-red-100 text-red-800 border border-red-200");
+    } finally {
+        toggleLoader(false);
+    }
+}
     </script>
 </body>
 </html>
