@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JO-TRANS | Pro Edition v17 POD</title>
+    <title>JO-TRANS | Pro Edition v17 POD + OCR</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -100,6 +101,44 @@
         </div>
     </div>
 
+    <div id="ocrModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-900 text-slate-100 rounded-2xl max-w-sm w-full p-4 mx-4 shadow-2xl border border-slate-700 flex flex-col relative">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-extrabold text-xs tracking-wider text-blue-400 flex items-center gap-1.5 uppercase">
+                    <i class="fas fa-eye-low-vision animate-pulse"></i> AI Text OCR Scanner DT
+                </h3>
+                <button onclick="closeOcrScanner()" class="text-slate-400 hover:text-slate-200 p-1 rounded-lg">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            
+            <div class="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center">
+                <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                <div class="absolute inset-x-6 h-12 border-2 border-dashed border-blue-500 rounded-lg bg-blue-500/10 flex items-center justify-center pointer-events-none">
+                    <div class="w-full h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-bounce"></div>
+                </div>
+                <div id="ocrLoader" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+                    <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-bold text-blue-400 tracking-wider uppercase animate-pulse">AI Membaca Angka...</span>
+                </div>
+            </div>
+            
+            <canvas id="captureCanvas" class="hidden"></canvas>
+
+            <div class="mt-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-center">
+                <span class="text-[9px] font-bold text-slate-500 uppercase block mb-0.5">Hasil Pembacaan Kamera:</span>
+                <div id="resultText" class="text-sm font-black tracking-widest text-emerald-400 min-h-[24px] flex items-center justify-center">
+                    Kamera Siap Bidik
+                </div>
+            </div>
+
+            <button onclick="takeSnapAndOCR()" class="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
+                <i class="fas fa-camera"></i> AMBIL FOTO & PROSES DT
+            </button>
+        </div>
+    </div>
+
+
     <div class="max-w-[1600px] mx-auto p-3 lg:p-4">
         <header class="flex flex-wrap items-center justify-between bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 mb-3.5 gap-3.5">
             <div class="flex items-center gap-4 flex-1 min-w-[300px]">
@@ -140,15 +179,19 @@
                 </button>
 
                 <button onclick="openScanner()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
-                    <i class="fas fa-camera"></i> SCAN CAMERA
+                    <i class="fas fa-qrcode"></i> SCAN BARCODE
+                </button>
+
+                <button onclick="openOcrScanner()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
+                    <i class="fas fa-eye"></i> SCAN FOTO DT (OCR)
                 </button>
 
                 <button onclick="uploadToFirebase()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
                     <i class="fas fa-cloud-arrow-up text-blue-400"></i> SYNC TO CLOUD
                 </button>
                 <button onclick="sendToGoogleSheets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm">
-    <i class="fas fa-share-nodes"></i> EXPORT TO SHARED GDRIVE
-</button>
+                    <i class="fas fa-share-nodes"></i> EXPORT TO SHARED GDRIVE
+                </button>
             </div>
         </header>
 
@@ -207,6 +250,13 @@
         let globalData = [];
         let selectedDTs = new Set();
         let html5QrcodeScanner = null;
+        let localStream = null; // Penampung stream webcam OCR
+
+        // KONFIGURASI ELEMEN BARU OCR SCANNER
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('captureCanvas');
+        const resultDiv = document.getElementById('resultText');
+        const ocrLoader = document.getElementById('ocrLoader');
 
         function getSLATarget(transporterName) {
             if (!transporterName) return null;
@@ -238,15 +288,12 @@
         }
         setTimeout(init, 1000);
 
-        // KUNCI COCOK FORMAT TANGGAL
         function cleanDateFormat(dateVal) {
             if (!dateVal) return '';
             dateVal = String(dateVal).trim();
             if (dateVal === '-' || dateVal === '0' || dateVal.toLowerCase() === 'null') return '';
-            
             if (dateVal.includes(' ')) dateVal = dateVal.split(' ')[0];
             if (dateVal.includes('T')) dateVal = dateVal.split('T')[0];
-
             if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
 
             if (dateVal.includes('-')) {
@@ -261,7 +308,6 @@
                     }
                 }
             }
-
             if (dateVal.includes('/')) {
                 const parts = dateVal.split('/');
                 if (parts.length === 3) {
@@ -274,10 +320,8 @@
                     }
                 }
             }
-
             const parsedTime = Date.parse(dateVal);
             if (!isNaN(parsedTime)) return new Date(parsedTime).toISOString().split('T')[0];
-
             return dateVal;
         }
 
@@ -521,7 +565,7 @@
                 localStorage.setItem('jotrans_local_db', JSON.stringify(globalData));
                 renderTable(globalData);
                 try {
-                    await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
+                    await window.setDoc(window.doc(window.doc, "monitoring_dt", "current_status"), { items: globalData });
                     showMsg("Data Terpilih Dihapus!", "bg-red-50 text-red-700 border border-red-100");
                 } catch (e) {
                     showMsg("Gagal Sync Cloud!", "bg-amber-50 text-amber-700 border border-amber-100");
@@ -530,21 +574,19 @@
             }
         }
 
-function openScanner() {
-    document.getElementById('scannerModal').classList.remove('hidden');
-    document.getElementById('scanResult').innerText = "Membuka kamera belakang utama...";
-    
-    // Inisialisasi mesin scan dengan seting prioritas kamera belakang HP (environment)
-    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 20, // Naikkan frame per second agar respons scan lebih cepat instan
-        qrbox: { width: 280, height: 180 }, // Sesuaikan rasio kotak bidik barcode tiket pengiriman
-        rememberLastUsedCamera: true,
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
-    });
-    
-    // Perintah eksekusi menyalakan sensor kamera belakang langsung
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-}
+        // ================= ALUR BARCODE QR SCANNER (EXISTING) =================
+        function openScanner() {
+            document.getElementById('scannerModal').classList.remove('hidden');
+            document.getElementById('scanResult').innerText = "Membuka kamera belakang utama...";
+            
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                fps: 20, 
+                qrbox: { width: 280, height: 180 }, 
+                rememberLastUsedCamera: true,
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            });
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
         function closeScanner() {
             if (html5QrcodeScanner) html5QrcodeScanner.clear().catch(err => console.error(err));
             document.getElementById('scannerModal').classList.add('hidden');
@@ -553,21 +595,118 @@ function openScanner() {
         function onScanSuccess(decodedText, decodedResult) {
             const cleanedText = decodedText.trim();
             document.getElementById('scanResult').innerHTML = `<span class="text-emerald-600 font-bold">Terbaca: ${cleanedText}</span>`;
-            const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']) === cleanedText);
-            if (idx !== -1) {
-                closeScanner();
-                const today = new Date().toISOString().split('T')[0];
-                globalData[idx]['Tgl Diterima DT'] = today;
-                if(!globalData[idx]['Tgl Diterima Barang']) globalData[idx]['Tgl Diterima Barang'] = today;
-                saveAndRender();
-                showMsg(`DT ${cleanedText} Berhasil Di-POD Selesai!`, "bg-emerald-50 text-emerald-700 border border-emerald-100");
-            } else {
-                document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak terdaftar di list ini!</span>`;
+            prosesPembaruanTanggalDT(cleanedText, "Barcode");
+        }
+        function onScanFailure(error) {}
+
+
+        // ================= LOGIKA BARU: AI TEXT OCR SCANNER =================
+        async function openOcrScanner() {
+            document.getElementById('ocrModal').classList.remove('hidden');
+            resultDiv.innerText = "Membuka kamera...";
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = localStream;
+                resultDiv.innerText = "Kamera Siap Bidik";
+            } catch (err) {
+                console.log("Kamera belakang environment gagal, pakai backup standar...");
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => { 
+                        localStream = stream;
+                        video.srcObject = stream; 
+                        resultDiv.innerText = "Kamera Backup Aktif";
+                    })
+                    .catch(e => { resultDiv.innerText = "Akses Kamera Diblokir Browser!"; });
             }
         }
 
-        function onScanFailure(error) {}
+        function closeOcrScanner() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById('ocrModal').classList.add('hidden');
+        }
 
+        function takeSnapAndOCR() {
+            ocrLoader.classList.remove('hidden');
+            resultDiv.innerText = "AI Sedang Membaca...";
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            Tesseract.recognize(
+                imageDataUrl,
+                'eng',
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                // Ekstrak angka saja (0-9)
+                let cleanNumbers = text.replace(/[^0-9]/g, '').trim();
+                
+                if (cleanNumbers.length > 0) {
+                    resultDiv.innerHTML = `Terbaca AI: <span class="text-base text-emerald-400 font-extrabold tracking-widest">${cleanNumbers}</span>`;
+                    // Jalankan fungsi pencocokan data ke tabel internal
+                    prosesPembaruanTanggalDT(cleanNumbers, "OCR Kamera");
+                } else {
+                    resultDiv.innerHTML = `<span class="text-[11px] text-amber-500">Angka tidak terdeteksi, posisikan lebih dekat</span>`;
+                }
+            }).catch(error => {
+                resultDiv.innerHTML = `<span class="text-[11px] text-red-500">Error AI: ${error.message}</span>`;
+            }).finally(() => {
+                ocrLoader.classList.add('hidden');
+            });
+        }
+
+        // ================= FUNGSI JEMBATAN UNTUK SCANNER DAN OCR =================
+        function prosesPembaruanTanggalDT(nomorDT, metode) {
+            // Cari index DT di dalam globalData array
+            const idx = globalData.findIndex(i => String(i['Delivery Ticket'] || i['DT']).trim() === String(nomorDT));
+            
+            if (idx !== -1) {
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Ubah data kolom Tgl Terima Logistics (Tgl Diterima DT)
+                globalData[idx]['Tgl Diterima DT'] = today;
+                
+                // Jika Tgl Terima Customer masih kosong, samakan datanya demi validitas metrics
+                if(!globalData[idx]['Tgl Diterima Barang']) {
+                    globalData[idx]['Tgl Diterima Barang'] = today;
+                }
+                
+                // Simpan perubahan ke LocalStorage & re-render tabel
+                saveAndRender();
+                
+                if (metode === "OCR Kamera") {
+                    setTimeout(() => {
+                        closeOcrScanner();
+                        showMsg(`DT ${nomorDT} Cocok! Tgl Terima Logistics Diperbarui.`, "bg-emerald-50 text-emerald-700 border border-emerald-100");
+                    }, 1200); // delay sejenak agar user bisa lihat angkanya pas di-scan
+                } else {
+                    closeScanner();
+                    showMsg(`DT ${nomorDT} Berhasil Di-POD Selesai!`, "bg-emerald-50 text-emerald-700 border border-emerald-100");
+                }
+            } else {
+                if (metode === "OCR Kamera") {
+                    resultDiv.innerHTML += `<br><span class="text-[11px] text-red-400 block mt-1">DT ${nomorDT} Tidak Ada di List!</span>`;
+                } else {
+                    document.getElementById('scanResult').innerHTML += `<br><span class="text-red-500 font-bold">DT tidak terdaftar di list ini!</span>`;
+                }
+            }
+        }
+
+
+        // ================= PERSISTENSI DATA & LAINNYA =================
         function downloadExcelLocal() {
             if(globalData.length === 0) return;
             const worksheet = XLSX.utils.json_to_sheet(globalData);
@@ -601,37 +740,43 @@ function openScanner() {
         function toggleLoader(show) {
             document.getElementById('loader').style.display = show ? 'flex' : 'none';
         }
+
+        async function uploadToFirebase() {
+            if (globalData.length === 0) return;
+            toggleLoader(true);
+            try {
+                await window.setDoc(window.doc(window.db, "monitoring_dt", "current_status"), { items: globalData });
+                showMsg("Berhasil Sinkronisasi Cloud!", "bg-blue-100 text-blue-800 border border-blue-200");
+            } catch(e) {
+                showMsg("Gagal Sinkronisasi Cloud!", "bg-red-100 text-red-800 border border-red-200");
+            }
+            toggleLoader(false);
+        }
+
         async function sendToGoogleSheets() {
-    if (globalData.length === 0) {
-        alert("Tidak ada data untuk dikirim ke GDrive!");
-        return;
-    }
-    
-    toggleLoader(true);
-    
-    // PASTE URL Aplikasi Web dari Google Apps Script Langkah 1 di sini
-    const appScriptUrl = "https://script.google.com/macros/s/AKfycbzIuRIsD_xM5Gh-MKAFUgr_smL8huVV09l5mVmeF1Sw23dQTT-zpnv0zV-LdkS8du0B/exec"; 
-    
-    try {
-        const response = await fetch(appScriptUrl, {
-            method: "POST",
-            mode: "no-cors", // Digunakan agar tidak terblokir kebijakan CORS browser
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ items: globalData })
-        });
-        
-        // Karena menggunakan mode 'no-cors', browser tidak bisa membaca isi response langsung, 
-        // tapi data dipastikan sampai ke Google Sheets dengan aman.
-        showMsg("Berhasil Terkoneksi ke GDrive & Apps Script Executed!", "bg-emerald-100 text-emerald-800 border border-emerald-200");
-    } catch (error) {
-        console.error(error);
-        showMsg("Koneksi ke GDrive Gagal!", "bg-red-100 text-red-800 border border-red-200");
-    } finally {
-        toggleLoader(false);
-    }
-}
+            if (globalData.length === 0) {
+                alert("Tidak ada data untuk dikirim ke GDrive!");
+                return;
+            }
+            toggleLoader(true);
+            const appScriptUrl = "https://script.google.com/macros/s/AKfycbzIuRIsD_xM5Gh-MKAFUgr_smL8huVV09l5mVmeF1Sw23dQTT-zpnv0zV-LdkS8du0B/exec"; 
+            try {
+                const response = await fetch(appScriptUrl, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ items: globalData })
+                });
+                showMsg("Berhasil Terkoneksi ke GDrive & Apps Script Executed!", "bg-emerald-100 text-emerald-800 border border-emerald-200");
+            } catch (error) {
+                console.error(error);
+                showMsg("Koneksi ke GDrive Gagal!", "bg-red-100 text-red-800 border border-red-200");
+            } finally {
+                toggleLoader(false);
+            }
+        }
     </script>
 </body>
 </html>
